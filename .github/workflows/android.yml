@@ -1,4 +1,4 @@
-name: Android CI (fix pipe escape + build APK)
+name: Android CI (fix pipe + build)
 
 on:
   push:
@@ -13,23 +13,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Detecta automáticamente la carpeta del proyecto Android
       - name: Detect Android project dir
         id: detect
         shell: bash
         run: |
           set -e
-          echo "Repo tree (raíz):"; ls -la
+          echo "Repo tree:"; ls -la
           FOUND=$(find . -maxdepth 3 -type f \( -name settings.gradle -o -name settings.gradle.kts \) -printf '%h\n' | sort -u | head -n1)
           if [ -z "$FOUND" ]; then
-            FOUND=$(find . -maxdepth 3 -type f -name "build.gradle*" -path "*/app/*" -printf '%h\n' | sed 's#/app$##' | sort -u | head -n1)
+            FOUND=$(find . -maxdepth 3 -type f -name gradlew -printf '%h\n' | sort -u | head -n1)
           fi
           if [ -z "$FOUND" ]; then
-            echo "❌ No se encontró proyecto Gradle. Sube el proyecto descomprimido (con app/, settings.gradle, gradlew...)."
+            echo "❌ No se encontró proyecto Gradle."
             exit 1
           fi
           echo "PROJECT_DIR=$FOUND" >> $GITHUB_ENV
-          echo "✅ Proyecto: $FOUND"; ls -la "$FOUND"
+          echo "✅ Proyecto: $FOUND"
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -56,25 +55,25 @@ jobs:
           arguments: wrapper
 
       - name: Ensure gradlew is executable
-        run: |
-          chmod +x "$PROJECT_DIR/gradlew" || true
+        run: chmod +x "$PROJECT_DIR/gradlew" || true
 
-      # 🛠️ Parchea el split de la barra vertical si aún está mal y muestra el contenido
-      - name: Guard: fix split("\\|") in RotationQrSupport
+      # 👇 OJO: el nombre va entre comillas simples
+      - name: 'Guard: fix split("\\|") in RotationQrSupport'
         shell: bash
         run: |
           set -e
-          FILE="$PROJECT_DIR/app/src/main/java/com/tonkar/volleyballreferee/engine/rotation/RotationQrSupport.java"
+          PKG_PATH="com/tonkar/volleyballreferee"   # cambia si tu paquete es otro
+          FILE="$PROJECT_DIR/app/src/main/java/$PKG_PATH/engine/rotation/RotationQrSupport.java"
           if [ -f "$FILE" ]; then
             echo "Antes (líneas 35-60):"
             nl -ba "$FILE" | sed -n '35,60p' || true
-            # Reemplaza versiones incorrectas: split("\|") o split("|")
+            # Corrige variantes incorrectas: "\|" o "|"
             perl -0777 -pe 's/split\(\s*"\s*\\\|\s*"\s*\)/split("\\\\|")/g' -i "$FILE"
             perl -0777 -pe 's/split\(\s*"\s*\|\s*"\s*\)/split("\\\\|")/g' -i "$FILE"
             echo "Después (buscar split(\"\\\\|\")):"
-            grep -n 'split("\s*\\\\\|")' -n "$FILE" || true
+            grep -n 'split("\\\\|")' "$FILE" || true
           else
-            echo "⚠️ No se encontró $FILE; quizá tu proyecto está en otra ruta o paquete."
+            echo "⚠️ No se encontró $FILE (ajusta PKG_PATH si tu paquete es distinto)."
           fi
 
       - name: Build Debug APK
@@ -87,7 +86,7 @@ jobs:
       - name: Show built files
         run: |
           echo "APK(s):"
-          find "$PROJECT_DIR" -type f \( -name "*.apk" -o -name "*.aab" -o -name "*.apks" \) -print || true
+          find "$PROJECT_DIR" -type f -name "*.apk" -print || true
 
       - name: Short SHA
         id: vars
