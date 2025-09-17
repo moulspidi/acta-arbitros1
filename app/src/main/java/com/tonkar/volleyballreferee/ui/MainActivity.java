@@ -1,5 +1,11 @@
 package com.tonkar.volleyballreferee.ui;
 
+import android.widget.FrameLayout;
+import android.view.ViewGroup;
+
+import com.tonkar.volleyballreferee.ui.rotation.RotationOverlayView;
+import com.tonkar.volleyballreferee.engine.rotation.RotationQrSupport;
+
 import android.content.Intent;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -28,7 +34,7 @@ import com.tonkar.volleyballreferee.ui.util.UiUtils;
 import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
-
+    private RotationOverlayView rotationOverlay;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         SyncWorker.enqueue(getApplicationContext());
@@ -39,7 +45,13 @@ public class MainActivity extends AppCompatActivity {
 
         Log.i(Tags.MAIN_UI, "Create main activity");
         setContentView(R.layout.activity_main);
-
+        FrameLayout root = (FrameLayout) findViewById(android.R.id.content);
+        rotationOverlay = new RotationOverlayView(this);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT);
+        rotationOverlay.setLayoutParams(lp);
+        root.addView(rotationOverlay);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         NavigationBarView navigationView = findViewById(R.id.main_navigation_view);
@@ -86,12 +98,10 @@ public class MainActivity extends AppCompatActivity {
     }
     @Override
     public void onResume() {
-        super.onResume();
-        try {
-            java.util.List<String> home = com.tonkar.volleyballreferee.engine.rotation.RotationQrSupport.getHome(this);
-            java.util.List<String> away = com.tonkar.volleyballreferee.engine.rotation.RotationQrSupport.getAway(this);
-            if (rotationOverlay != null) rotationOverlay.setData(home, away);
-        } catch (Throwable ignored) {}
+       super.onResume();
+        java.util.List<String> home = RotationQrSupport.getHome(this);
+        java.util.List<String> away = RotationQrSupport.getAway(this);
+        if (rotationOverlay != null) rotationOverlay.setData(home, away);
     }
 
     private void navigateToFragment(@IdRes int fragmentId) {
