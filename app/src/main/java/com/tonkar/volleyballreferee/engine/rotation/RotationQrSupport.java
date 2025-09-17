@@ -42,7 +42,7 @@ public final class RotationQrSupport {
         }
 
         boolean ok2 = false;
-        String[] parts = t.split("\|");
+        String[] parts = t.split("\\|");
         for (String part : parts) {
             String[] kv = part.split(":", 2);
             if (kv.length != 2) continue;
