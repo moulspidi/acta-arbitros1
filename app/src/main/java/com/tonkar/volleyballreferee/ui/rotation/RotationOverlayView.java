@@ -6,6 +6,7 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.view.View;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -22,8 +23,8 @@ public class RotationOverlayView extends View {
     public RotationOverlayView(Context c, AttributeSet a) {
         super(c, a);
         density = getResources().getDisplayMetrics().density;
-        pHome.setColor(0xFFE85D1A); // orange
-        pAway.setColor(0xFF0E5CC6); // blue
+        pHome.setColor(0xFFE85D1A); // naranja
+        pAway.setColor(0xFF0E5CC6); // azul
         pText.setColor(0xFFFFFFFF);
         pText.setTextAlign(Paint.Align.CENTER);
         pText.setTextSize(16 * density);
