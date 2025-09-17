@@ -1,5 +1,11 @@
 package com.tonkar.volleyballreferee.ui;
 
+import android.content.Intent;
+import android.view.Menu;
+import android.view.MenuItem;
+
+import com.tonkar.volleyballreferee.ui.rotation.RotationQrScanActivity;
+
 import android.content.*;
 import android.content.res.Resources;
 import android.os.Bundle;
@@ -64,13 +70,28 @@ public class MainActivity extends AppCompatActivity {
 
         showReleaseNotes();
     }
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_main, menu);
+        return true;
+    }
 
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.action_scan_rotation) {
+            startActivity(new Intent(this, RotationQrScanActivity.class));
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
     @Override
     public void onResume() {
         super.onResume();
-        NavigationBarView navigationView = findViewById(R.id.main_navigation_view);
-        navigationView.getMenu().findItem(R.id.scheduled_games_list_fragment).setVisible(PrefUtils.canSync(this));
-        navigationView.getMenu().findItem(R.id.user_fragment).setVisible(PrefUtils.hasServerUrl(this));
+        try {
+            java.util.List<String> home = com.tonkar.volleyballreferee.engine.rotation.RotationQrSupport.getHome(this);
+            java.util.List<String> away = com.tonkar.volleyballreferee.engine.rotation.RotationQrSupport.getAway(this);
+            if (rotationOverlay != null) rotationOverlay.setData(home, away);
+        } catch (Throwable ignored) {}
     }
 
     private void navigateToFragment(@IdRes int fragmentId) {
