@@ -1,0 +1,84 @@
+
+name: Android CI (Debug APK)
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect Android project directory
+        id: detect
+        shell: bash
+        run: |
+          set -e
+          echo "Repo tree:"; ls -la
+          # Busca proyecto (settings.gradle/.kts) o, si no, gradlew
+          FOUND=$(find . -maxdepth 3 -type f \( -name settings.gradle -o -name settings.gradle.kts \) -printf '%h\n' | sort -u | head -n1)
+          if [ -z "$FOUND" ]; then
+            FOUND=$(find . -maxdepth 3 -type f -name gradlew -printf '%h\n' | sort -u | head -n1)
+          fi
+          if [ -z "$FOUND" ]; then
+            echo "❌ No se encontró un proyecto Gradle (settings.gradle/gradlew). Sube el proyecto descomprimido."
+            exit 1
+          fi
+          echo "PROJECT_DIR=$FOUND" >> $GITHUB_ENV
+          echo "✅ Proyecto detectado en: $FOUND"; ls -la "$FOUND"
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK components & accept licenses
+        run: |
+          sdkmanager "platform-tools" \
+                     "platforms;android-33" "build-tools;33.0.2" \
+                     "platforms;android-34" "build-tools;34.0.0" \
+                     "platforms;android-35" "build-tools;35.0.0"
+          yes | sdkmanager --licenses
+      # Genera gradle wrapper si falta
+      - name: Generate Gradle Wrapper if missing
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 8.7
+          build-root-directory: ${{ env.PROJECT_DIR }}
+          arguments: wrapper
+
+      - name: Ensure gradlew is executable
+        run: |
+          if [ -f "$PROJECT_DIR/gradlew" ]; then chmod +x "$PROJECT_DIR/gradlew"; fi
+      - name: Build Debug APK (pass suppress flag via -P)
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: wrapper
+          build-root-directory: ${{ env.PROJECT_DIR }}
+          arguments: clean assembleDebug -Pandroid.suppressUnsupportedCompileSdk=35
+
+      - name: Show built files
+        run: |
+          echo "APK(s) encontrados dentro de $PROJECT_DIR:"
+          find "$PROJECT_DIR" -type f \( -name "*.apk" -o -name "*.aab" -o -name "*.apks" \) -print || true
+      - name: Short SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact(s)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-${{ steps.vars.outputs.sha_short }}
+          path: |
+            ${{ env.PROJECT_DIR }}/**/build/outputs/apk/**/debug/*.apk
+            ${{ env.PROJECT_DIR }}/**/build/outputs/**/*.apk
+          if-no-files-found: error
+          retention-days: 14
