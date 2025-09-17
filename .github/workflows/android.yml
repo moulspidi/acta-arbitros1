@@ -1,5 +1,4 @@
-
-name: Android CI (Debug APK)
+name: Android CI (fix pipe escape + build APK)
 
 on:
   push:
@@ -14,23 +13,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Detect Android project directory
+      # Detecta automáticamente la carpeta del proyecto Android
+      - name: Detect Android project dir
         id: detect
         shell: bash
         run: |
           set -e
-          echo "Repo tree:"; ls -la
-          # Busca proyecto (settings.gradle/.kts) o, si no, gradlew
+          echo "Repo tree (raíz):"; ls -la
           FOUND=$(find . -maxdepth 3 -type f \( -name settings.gradle -o -name settings.gradle.kts \) -printf '%h\n' | sort -u | head -n1)
           if [ -z "$FOUND" ]; then
-            FOUND=$(find . -maxdepth 3 -type f -name gradlew -printf '%h\n' | sort -u | head -n1)
+            FOUND=$(find . -maxdepth 3 -type f -name "build.gradle*" -path "*/app/*" -printf '%h\n' | sed 's#/app$##' | sort -u | head -n1)
           fi
           if [ -z "$FOUND" ]; then
-            echo "❌ No se encontró un proyecto Gradle (settings.gradle/gradlew). Sube el proyecto descomprimido."
+            echo "❌ No se encontró proyecto Gradle. Sube el proyecto descomprimido (con app/, settings.gradle, gradlew...)."
             exit 1
           fi
           echo "PROJECT_DIR=$FOUND" >> $GITHUB_ENV
-          echo "✅ Proyecto detectado en: $FOUND"; ls -la "$FOUND"
+          echo "✅ Proyecto: $FOUND"; ls -la "$FOUND"
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -47,7 +47,7 @@ jobs:
                      "platforms;android-34" "build-tools;34.0.0" \
                      "platforms;android-35" "build-tools;35.0.0"
           yes | sdkmanager --licenses
-      # Genera gradle wrapper si falta
+
       - name: Generate Gradle Wrapper if missing
         uses: gradle/gradle-build-action@v3
         with:
@@ -57,8 +57,27 @@ jobs:
 
       - name: Ensure gradlew is executable
         run: |
-          if [ -f "$PROJECT_DIR/gradlew" ]; then chmod +x "$PROJECT_DIR/gradlew"; fi
-      - name: Build Debug APK (pass suppress flag via -P)
+          chmod +x "$PROJECT_DIR/gradlew" || true
+
+      # 🛠️ Parchea el split de la barra vertical si aún está mal y muestra el contenido
+      - name: Guard: fix split("\\|") in RotationQrSupport
+        shell: bash
+        run: |
+          set -e
+          FILE="$PROJECT_DIR/app/src/main/java/com/tonkar/volleyballreferee/engine/rotation/RotationQrSupport.java"
+          if [ -f "$FILE" ]; then
+            echo "Antes (líneas 35-60):"
+            nl -ba "$FILE" | sed -n '35,60p' || true
+            # Reemplaza versiones incorrectas: split("\|") o split("|")
+            perl -0777 -pe 's/split\(\s*"\s*\\\|\s*"\s*\)/split("\\\\|")/g' -i "$FILE"
+            perl -0777 -pe 's/split\(\s*"\s*\|\s*"\s*\)/split("\\\\|")/g' -i "$FILE"
+            echo "Después (buscar split(\"\\\\|\")):"
+            grep -n 'split("\s*\\\\\|")' -n "$FILE" || true
+          else
+            echo "⚠️ No se encontró $FILE; quizá tu proyecto está en otra ruta o paquete."
+          fi
+
+      - name: Build Debug APK
         uses: gradle/gradle-build-action@v3
         with:
           gradle-version: wrapper
@@ -67,8 +86,9 @@ jobs:
 
       - name: Show built files
         run: |
-          echo "APK(s) encontrados dentro de $PROJECT_DIR:"
+          echo "APK(s):"
           find "$PROJECT_DIR" -type f \( -name "*.apk" -o -name "*.aab" -o -name "*.apks" \) -print || true
+
       - name: Short SHA
         id: vars
         run: echo "sha_short=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
